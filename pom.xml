@@ -32,10 +32,10 @@
                 <inherited>false</inherited>
                 <configuration>
                     <includes>
-                        <include>**/*TestServerManager.java</include>
+                        <!--<include>**/*TestServerManager.java</include>-->
                         <!--<include>**/*TestCase.java</include>-->
                         <!--<include>**/BAMAnalyzerTestCase.java</include>-->
-                       <include>**/URLToolboxTestCase.java</include>
+                       <include>**/ToolboxDeploymentUndeploymentTestCase.java</include>
                         <!--<include>**/LoginLogoutTestCase.java</include>-->
                     </includes>
                     <systemProperties>
