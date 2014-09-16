@@ -1,0 +1,21 @@
+#java specific
+*.class
+.idea
+target
+*.iml
+data/
+*.docx
+*.odt
+*.xlsx
+*.ods
+
+#netbeans ignore personal stuff
+
+
+## generic files to ignore
+*~
+*.lock
+*.DS_Store
+*.swp
+*.out
+
