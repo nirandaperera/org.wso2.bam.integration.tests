@@ -21,16 +21,30 @@ import org.apache.axis2.client.Options;
 import org.apache.axis2.client.ServiceClient;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.ConfigurationContextFactory;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.testng.annotations.*;
-import org.wso2.bam.integration.tests.BAMTestServerManager;
+//import org.wso2.bam.integration.tests.BAMTestServerManager;
 import org.wso2.carbon.bam.toolbox.deployer.stub.BAMToolboxDepolyerServiceStub;
-import org.wso2.carbon.integration.framework.ClientConnectionUtil;
 import org.wso2.carbon.integration.framework.LoginLogoutUtil;
-import org.wso2.carbon.integration.framework.utils.FrameworkSettings;
+import org.wso2.carbon.integration.framework.ClientConnectionUtil;
+//import org.wso2.carbon.integration.framework.utils.FrameworkSettings;
+//import org.apache.axis2.context.ConfigurationContext;
+//import org.apache.axis2.context.ConfigurationContextFactory;
 
+//import org.wso2.carbon.automation.core.utils.fileutils.FileManager;
+
+import org.wso2.carbon.integration.framework.utils.CodeCoverageUtils;
+import org.wso2.carbon.integration.framework.utils.ServerUtils;
+import org.wso2.carbon.integration.framework.utils.TestUtil;
+import org.wso2.carbon.integration.framework.utils.FrameworkSettings;
+import org.wso2.carbon.automation.api.clients.registry.ResourceAdminServiceClient;
+import org.wso2.carbon.registry.resource.stub.ResourceAdminServiceStub;
+
+import java.io.File;
 import java.io.IOException;
+
 
 import static org.testng.Assert.assertTrue;
 
@@ -40,84 +54,92 @@ public class ToolboxDeploymentUndeploymentTestCase {
 
     private LoginLogoutUtil util = new LoginLogoutUtil();
 
-    private static final String TOOLBOX_DEPLOYER_SERVICE = "/services/BAMToolboxDepolyerService";
+    private static final String HIVE_SCRIPT_LOCATION = "/_system/config/repository/hive/scripts/";
 
     private static final String SERVER_URL = "https://localhost:9443/";
     private BAMToolboxDepolyerServiceStub toolboxStub;
     private static String TOOLBOX_URL = "http://dist.wso2.org/downloads/business-activity-monitor/" +
             "tool-boxes/KPI_Phone_Retail_Store.tbox";
 
-    private String deployedToolBox = "";
+    private String carbonHome = "";
+    private String serviceStatToolBoxSource = "";
+    private String serviceStatToolBoxDestination = "";
+    private String webAppStatToolBoxSource = "";
+    private String webAppStatToolBoxDestination = "";
+    private static final String BAM_TBOX_DEPLOYMENT_DIR = "/repository/deployment/server/bam-toolbox/";
+    private static final String TBOX_SAMPLES_DIR = "/samples/toolboxes/";
+    private static final String REGISTRY_SERVICE = "/services/ResourceAdminService";
 
-    //    private carbonHome = "";
-    private BAMTestServerManager serverManager = new BAMTestServerManager();
+    private String carbonZip;
+    private int portOffset;
+
+    private ServerUtils serverUtils = new ServerUtils();
+    private ResourceAdminServiceStub registryStub;
+
 
     private static final int RETRY_COUNT = 30;
 
-    @BeforeSuite(timeOut = 180000)
-    public String startBAMServer() {
-        log.info("************** start server ************");
 
-        String carbonHome = "";
+    @BeforeSuite(timeOut = 180000)
+    public void setupServerAndToolBoxes() throws Exception {
+        log.info("************** unpack BAM ************");
+        unpackBAM();
+
+        log.info("************** copy toolbox to BAM ************");
+        log.info("carbon home: " + carbonHome);
+        serviceStatToolBoxSource = carbonHome + TBOX_SAMPLES_DIR + "Service_Statistics_Monitoring.tbox";
+        log.info("serviceStatToolBox source: " + serviceStatToolBoxSource);
+        serviceStatToolBoxDestination = carbonHome + BAM_TBOX_DEPLOYMENT_DIR;
+        log.info("serviceStatToolBox dest dir: " + serviceStatToolBoxDestination);
+
         try {
-            carbonHome = serverManager.startServer();
+            copyFileToDir(new File(serviceStatToolBoxSource), new File(serviceStatToolBoxDestination));
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return carbonHome;
+
+        log.info("*************** start server ************");
+        startServer();
+
     }
 
 
     @BeforeClass(groups = {"wso2.bam"})
     public void init() throws Exception {
         log.info("************** before class ************");
-//        ConfigurationContext configContext = ConfigurationContextFactory.
-//                createConfigurationContextFromFileSystem(null);
-//        String EPR = "https://" + FrameworkSettings.HOST_NAME +
-//                ":" + FrameworkSettings.HTTPS_PORT + TOOLBOX_DEPLOYER_SERVICE;
-//        String loggedInSessionCookie = util.login();
-//        toolboxStub = new BAMToolboxDepolyerServiceStub(configContext, EPR);
-//        ServiceClient client = toolboxStub._getServiceClient();
-//        Options option = client.getOptions();
-//        option.setManageSession(true);
-//        option.setProperty(org.apache.axis2.transport.http.HTTPConstants.COOKIE_STRING,
-//                loggedInSessionCookie);
+
+
+        String loggedInSessionCookie = util.login();
+
+        ConfigurationContext configContext = ConfigurationContextFactory.
+                createConfigurationContextFromFileSystem(null);
+        initializedRegistryStub(loggedInSessionCookie, configContext);
+
+
     }
 
+
     @Test(groups = {"wso2.bam"})
-    public void urlToolBoxDeployment() throws Exception {
+    public void readingHiveScrpits() throws Exception {
         log.info("************** test class ************");
-//        toolboxStub.deployToolBoxFromURL(TOOLBOX_URL);
-//        log.info("Installing toolbox...");
+
+//        Thread.sleep(10000000);
+
+//        String EPR = "https://" + FrameworkSettings.HOST_NAME +
+//                ":" + FrameworkSettings.HTTPS_PORT + REGISTRY_SERVICE;
 //
-//        int slashIndex = TOOLBOX_URL.lastIndexOf('/');
-//        deployedToolBox = TOOLBOX_URL.substring(slashIndex + 1);
-//
-//        String toolBoxname = deployedToolBox.replaceAll(".tbox", "");
-//        boolean installed = false;
-//        int noOfTry = 1;
-//
-//        while (!installed && noOfTry <= RETRY_COUNT) {
-//            Thread.sleep(1000);
-//
-//            //get List of deployed toolboxes
-//            BAMToolboxDepolyerServiceStub.ToolBoxStatusDTO statusDTO = toolboxStub.getDeployedToolBoxes("1", "");
-//            String[] deployed = statusDTO.getDeployedTools();
-//
-//            if (null != deployed) {
-//
-//                for (String aTool : deployed) {
-//                    aTool = aTool.replaceAll(".tbox", "");
-//                    if (aTool.equalsIgnoreCase(toolBoxname)) {
-//                        installed = true;
-//                        break;
-//                    }
-//                }
-//            }
-//            noOfTry++;
-//        }
-//
-//        assertTrue(installed, "URL installation of toolbox :" + toolBoxname + " failed!!");
+//        ResourceAdminServiceClient resourceAdminServiceClient = new ResourceAdminServiceClient(EPR, "admin", "admin");
+
+//        String serviceStatHiveScrpit = resourceAdminServiceClient
+//                .getTextContent(HIVE_SCRIPT_LOCATION + "service_stats.hiveql");
+
+        String serviceStatHiveScrpit = registryStub
+                .getTextContent(HIVE_SCRIPT_LOCATION + "service_stats.hiveql");
+
+        System.out.println("------ HIVE SCRIPT -----");
+        System.out.println(serviceStatHiveScrpit);
+
+
     }
 
 //    @Test(groups = {"wso2.bam"}, dependsOnMethods = "urlToolBoxDeployment")
@@ -167,15 +189,76 @@ public class ToolboxDeploymentUndeploymentTestCase {
     @AfterClass(groups = {"wso2.bam"})
     public void logout() throws Exception {
         log.info("************** after class ************");
-//        ClientConnectionUtil.waitForPort(9443);
-//        util.logout();
+        ClientConnectionUtil.waitForPort(9443);
+        util.logout();
     }
 
     @AfterSuite(timeOut = 180000)
     public void stopBAMServer() throws Exception {
         log.info("************** stop server ************");
+        stopServer();
+    }
 
-        serverManager.stopServer();
+
+    protected void copyArtifacts(String carbonHome) throws IOException {
+        // No artifacts need to be copied
+    }
+
+    private static void copyFileToDir(File source, File dest) throws IOException {
+        File destinationFile = new File(dest.getPath() + "/" + source.getName());
+        System.out.println(destinationFile);
+        if (destinationFile.exists()) {
+            destinationFile.delete();
+        }
+        FileUtils.copyFileToDirectory(source, dest);
+    }
+
+    private String unpackCarbonZip() throws IOException {
+        if (carbonZip == null) {
+            carbonZip = System.getProperty("carbon.zip");
+        }
+        if (carbonZip == null) {
+            throw new IllegalArgumentException("carbon zip file is null");
+        }
+        String carbonHome = serverUtils.setUpCarbonHome(carbonZip);
+        TestUtil.copySecurityVerificationService(carbonHome);
+        copyArtifacts(carbonHome);
+
+        return carbonHome;
+    }
+
+    private void unpackBAM() throws Exception {
+        try {
+            carbonHome = unpackCarbonZip();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private void startServer() throws IOException {
+        serverUtils.startServerUsingCarbonHome(carbonHome, portOffset);
+        FrameworkSettings.init();
+    }
+
+    private void stopServer() throws Exception {
+        serverUtils.shutdown(portOffset);
+        CodeCoverageUtils.generateReports();
+    }
+
+    private void initializedRegistryStub(String loggedInSessionCookie,
+                                         ConfigurationContext configContext) throws Exception {
+
+        String EPR = "https://" + FrameworkSettings.HOST_NAME +
+                ":" + FrameworkSettings.HTTPS_PORT + REGISTRY_SERVICE;
+        registryStub = new ResourceAdminServiceStub(configContext, EPR);
+        ServiceClient client = registryStub._getServiceClient();
+        Options option = client.getOptions();
+        option.setTimeOutInMilliSeconds(10 * 60000);
+        option.setManageSession(true);
+        option.setProperty(org.apache.axis2.transport.http.HTTPConstants.COOKIE_STRING,
+                loggedInSessionCookie);
+
     }
 
 }
