@@ -25,26 +25,19 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.testng.annotations.*;
-//import org.wso2.bam.integration.tests.BAMTestServerManager;
-import org.wso2.carbon.bam.toolbox.deployer.stub.BAMToolboxDepolyerServiceStub;
-import org.wso2.carbon.integration.framework.LoginLogoutUtil;
 import org.wso2.carbon.integration.framework.ClientConnectionUtil;
-//import org.wso2.carbon.integration.framework.utils.FrameworkSettings;
-//import org.apache.axis2.context.ConfigurationContext;
-//import org.apache.axis2.context.ConfigurationContextFactory;
-
-//import org.wso2.carbon.automation.core.utils.fileutils.FileManager;
-
+import org.wso2.carbon.integration.framework.LoginLogoutUtil;
 import org.wso2.carbon.integration.framework.utils.CodeCoverageUtils;
+import org.wso2.carbon.integration.framework.utils.FrameworkSettings;
 import org.wso2.carbon.integration.framework.utils.ServerUtils;
 import org.wso2.carbon.integration.framework.utils.TestUtil;
-import org.wso2.carbon.integration.framework.utils.FrameworkSettings;
-import org.wso2.carbon.automation.api.clients.registry.ResourceAdminServiceClient;
 import org.wso2.carbon.registry.resource.stub.ResourceAdminServiceStub;
+import org.wso2.carbon.registry.resource.stub.beans.xsd.CollectionContentBean;
 
 import java.io.File;
 import java.io.IOException;
-
+import java.net.URI;
+import java.net.URL;
 
 import static org.testng.Assert.assertTrue;
 
@@ -52,23 +45,19 @@ import static org.testng.Assert.assertTrue;
 public class ToolboxDeploymentUndeploymentTestCase {
     private static final Log log = LogFactory.getLog(ToolboxDeploymentUndeploymentTestCase.class);
 
-    private LoginLogoutUtil util = new LoginLogoutUtil();
 
-    private static final String HIVE_SCRIPT_LOCATION = "/_system/config/repository/hive/scripts/";
+    private LoginLogoutUtil loginLogoutUtil = new LoginLogoutUtil();
 
-    private static final String SERVER_URL = "https://localhost:9443/";
-    private BAMToolboxDepolyerServiceStub toolboxStub;
-    private static String TOOLBOX_URL = "http://dist.wso2.org/downloads/business-activity-monitor/" +
-            "tool-boxes/KPI_Phone_Retail_Store.tbox";
 
     private String carbonHome = "";
-    private String serviceStatToolBoxSource = "";
     private String serviceStatToolBoxDestination = "";
-    private String webAppStatToolBoxSource = "";
-    private String webAppStatToolBoxDestination = "";
     private static final String BAM_TBOX_DEPLOYMENT_DIR = "/repository/deployment/server/bam-toolbox/";
-    private static final String TBOX_SAMPLES_DIR = "/samples/toolboxes/";
     private static final String REGISTRY_SERVICE = "/services/ResourceAdminService";
+    private static final String SERVICE_STAT_TBOX_NAME = "Service_Statistics_Monitoring.tbox";
+    private static final String HIVE_SCRIPT_LOCATION = "/_system/config/repository/hive/scripts/";
+    private static final String SERVICE_STAT_TBOX = "/samples/toolboxes/Service_Statistics_Monitoring.tbox";
+    private static final URL SERVICE_STAT_TBOX_DUMMY = ToolboxDeploymentUndeploymentTestCase.class.getClassLoader()
+            .getResource(SERVICE_STAT_TBOX_NAME);
 
     private String carbonZip;
     private int portOffset;
@@ -76,29 +65,30 @@ public class ToolboxDeploymentUndeploymentTestCase {
     private ServerUtils serverUtils = new ServerUtils();
     private ResourceAdminServiceStub registryStub;
 
+    private String[] initialQueries;
+    private String[] replacedHiveQueries;
 
-    private static final int RETRY_COUNT = 30;
+    private String initialHiveScriptName;
 
 
     @BeforeSuite(timeOut = 180000)
     public void setupServerAndToolBoxes() throws Exception {
-        log.info("************** unpack BAM ************");
-        unpackBAM();
+        log.info("Unpacking BAM zip file");
+        carbonHome = unpackCarbonZip();
+        log.info("Carbon home: " + carbonHome);
 
-        log.info("************** copy toolbox to BAM ************");
-        log.info("carbon home: " + carbonHome);
-        serviceStatToolBoxSource = carbonHome + TBOX_SAMPLES_DIR + "Service_Statistics_Monitoring.tbox";
-        log.info("serviceStatToolBox source: " + serviceStatToolBoxSource);
-        serviceStatToolBoxDestination = carbonHome + BAM_TBOX_DEPLOYMENT_DIR;
-        log.info("serviceStatToolBox dest dir: " + serviceStatToolBoxDestination);
-
+        log.info("Copying Service Stat Toolbox");
+        String serviceStatToolBoxSource = carbonHome + SERVICE_STAT_TBOX;
+        log.info("SERVICE_STAT_TBOX_NAME source: " + serviceStatToolBoxSource);
+        serviceStatToolBoxDestination = carbonHome + BAM_TBOX_DEPLOYMENT_DIR + SERVICE_STAT_TBOX_NAME;
+        log.info("SERVICE_STAT_TBOX_NAME destination: " + serviceStatToolBoxDestination);
         try {
-            copyFileToDir(new File(serviceStatToolBoxSource), new File(serviceStatToolBoxDestination));
+            copyFile(new File(serviceStatToolBoxSource), new File(serviceStatToolBoxDestination));
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        log.info("*************** start server ************");
+        log.info("Starting the Carbon server");
         startServer();
 
     }
@@ -106,96 +96,118 @@ public class ToolboxDeploymentUndeploymentTestCase {
 
     @BeforeClass(groups = {"wso2.bam"})
     public void init() throws Exception {
-        log.info("************** before class ************");
+        log.info("Logging into Carbon server");
 
-
-        String loggedInSessionCookie = util.login();
+        String loggedInSessionCookie = loginLogoutUtil.login();
+        log.info("Logged in session cookie : " + loggedInSessionCookie);
 
         ConfigurationContext configContext = ConfigurationContextFactory.
                 createConfigurationContextFromFileSystem(null);
         initializedRegistryStub(loggedInSessionCookie, configContext);
-
-
     }
 
 
     @Test(groups = {"wso2.bam"})
-    public void readingHiveScrpits() throws Exception {
-        log.info("************** test class ************");
+    public void readingInitialHiveScripts() throws Exception {
+        log.info("Reading initial Hive scripts");
 
-//        Thread.sleep(10000000);
+        CollectionContentBean collection = registryStub
+                .getCollectionContent(HIVE_SCRIPT_LOCATION);
 
-//        String EPR = "https://" + FrameworkSettings.HOST_NAME +
-//                ":" + FrameworkSettings.HTTPS_PORT + REGISTRY_SERVICE;
-//
-//        ResourceAdminServiceClient resourceAdminServiceClient = new ResourceAdminServiceClient(EPR, "admin", "admin");
+        initialHiveScriptName = collection.getChildPaths()[0];
 
-//        String serviceStatHiveScrpit = resourceAdminServiceClient
-//                .getTextContent(HIVE_SCRIPT_LOCATION + "service_stats.hiveql");
+        log.info("Initial Hive script name : " + initialHiveScriptName);
 
-        String serviceStatHiveScrpit = registryStub
-                .getTextContent(HIVE_SCRIPT_LOCATION + "service_stats.hiveql");
+        String hiveScript = registryStub
+                .getTextContent(initialHiveScriptName).trim();
 
-        System.out.println("------ HIVE SCRIPT -----");
-        System.out.println(serviceStatHiveScrpit);
+        initialQueries = hiveScript.split(";");
 
+
+        logQueries(initialQueries);
 
     }
 
-//    @Test(groups = {"wso2.bam"}, dependsOnMethods = "urlToolBoxDeployment")
-//    public void undeployURlToolBox() throws Exception {
-//        String toolBoxname = deployedToolBox.replaceAll(".tbox", "");
-//               toolboxStub.undeployToolBox(new String[]{toolBoxname});
+    @Test(groups = {"wso2.bam"}, dependsOnMethods = {"readingInitialHiveScripts"})
+    public void temporarilyLogout() throws Exception {
+        log.info("Temporarily logging out from Carbon server");
+        logout();
+    }
+
+    @Test(groups = {"wso2.bam"}, dependsOnMethods = {"temporarilyLogout"}, timeOut = 180000)
+    public void temporarilyShutdownServer() throws Exception {
+        log.info("Temporarily shutting down server");
+        stopServer();
+    }
+
+    @Test(groups = {"wso2.bam"}, dependsOnMethods = {"temporarilyShutdownServer"})
+    public void replaceToolbox() throws Exception {
+        log.info("Replacing toolbox from another toolbox!");
+
+        copyFile(new File(SERVICE_STAT_TBOX_DUMMY.getFile()), new File(serviceStatToolBoxDestination));
+
+    }
+
+    @Test(groups = {"wso2.bam"}, dependsOnMethods = {"replaceToolbox"}, timeOut = 180000)
+    public void restartServer() throws Exception {
+        log.info("Restarting the Carbon server with the replaced toolbox");
+        startServer();
+
+        init();
+    }
+
+    @Test(groups = {"wso2.bam"}, dependsOnMethods = {"restartServer"})
+    public void checkingHiveScripts() throws Exception {
+        boolean nameReplaced = false;
+        boolean querriesReplaced = true;
+
+        log.info("Reading Hive scripts after server restart");
+        CollectionContentBean collection = registryStub
+                .getCollectionContent(HIVE_SCRIPT_LOCATION);
+
+        String replacedHiveScriptName = collection.getChildPaths()[0];
+
+        log.info("Replaced Hive script name : " + replacedHiveScriptName);
+
+        String hiveScript = registryStub
+                .getTextContent(replacedHiveScriptName).trim();
+
+        replacedHiveQueries = hiveScript.split(";");
+        logQueries(replacedHiveQueries);
+
+//        if (replacedHiveScriptName != initialHiveScriptName) {
+//            nameReplaced = true;
+//            log.info("Script name replaced!");
+//        }
 //
-//               boolean unInstalled = false;
+//        if (replacedHiveQueries.length != initialQueries.length) {
+//            querriesReplaced = false;
+//        } else {
+//            for (int i = 0; i < replacedHiveQueries.length; i++) {
+//                if (replacedHiveQueries[i].equals(initialQueries[i])) {
+//                    continue;
+//                } else {
+//                    querriesReplaced = false;
+//                    break;
+//                }
+//            }
+//        }
 //
-//               log.info("Un installing toolbox...");
-//
-//               int noOfTry = 1;
-//
-//               while (!unInstalled && noOfTry <= RETRY_COUNT) {
-//                   Thread.sleep(1000);
-//
-//                   BAMToolboxDepolyerServiceStub.ToolBoxStatusDTO statusDTO = toolboxStub.getDeployedToolBoxes("1", "");
-//                   String[] deployedTools = statusDTO.getDeployedTools();
-//                   String[] undeployingTools = statusDTO.getToBeUndeployedTools();
-//                   boolean isUninstalled = true;
-//
-//                   if (null != undeployingTools) {
-//                       for (String aTool : undeployingTools) {
-//                           if (aTool.equalsIgnoreCase(toolBoxname)) {
-//                               isUninstalled = false;
-//                               break;
-//                           }
-//                       }
-//                   }
-//
-//                   if (null != deployedTools && isUninstalled) {
-//                       for (String aTool : deployedTools) {
-//                           if (aTool.equalsIgnoreCase(toolBoxname)) {
-//                               isUninstalled = false;
-//                               break;
-//                           }
-//                       }
-//                   }
-//                   unInstalled = isUninstalled;
-//                   noOfTry++;
-//               }
-//
-//        assertTrue(unInstalled, "Un installing url toolbox" + deployedToolBox + " is not successful");
-//    }
+//        if (querriesReplaced) log.info("Queries have replaced!");
+        assertTrue(nameReplaced, "Script has been replaced. Test successful!");
+    }
 
 
     @AfterClass(groups = {"wso2.bam"})
     public void logout() throws Exception {
-        log.info("************** after class ************");
-        ClientConnectionUtil.waitForPort(9443);
-        util.logout();
+        log.info("Logging out from Carbon server");
+        ClientConnectionUtil.waitForPort(Integer.parseInt(FrameworkSettings.HTTPS_PORT));
+        loginLogoutUtil.logout();
     }
 
     @AfterSuite(timeOut = 180000)
     public void stopBAMServer() throws Exception {
-        log.info("************** stop server ************");
+        log.info("Stopping the server");
         stopServer();
     }
 
@@ -204,13 +216,13 @@ public class ToolboxDeploymentUndeploymentTestCase {
         // No artifacts need to be copied
     }
 
-    private static void copyFileToDir(File source, File dest) throws IOException {
-        File destinationFile = new File(dest.getPath() + "/" + source.getName());
-        System.out.println(destinationFile);
-        if (destinationFile.exists()) {
-            destinationFile.delete();
+    private static void copyFile(File srcFile, File destFile) throws IOException {
+        //File destinationFile = new File(dest.getPath() + "/" + source.getName());
+        if (destFile.exists()) {
+            log.info("File exists in the destination folder and it will be deleted!");
+            destFile.delete();
         }
-        FileUtils.copyFileToDirectory(source, dest);
+        FileUtils.copyFile(srcFile, destFile);
     }
 
     private String unpackCarbonZip() throws IOException {
@@ -225,15 +237,6 @@ public class ToolboxDeploymentUndeploymentTestCase {
         copyArtifacts(carbonHome);
 
         return carbonHome;
-    }
-
-    private void unpackBAM() throws Exception {
-        try {
-            carbonHome = unpackCarbonZip();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
     }
 
     private void startServer() throws IOException {
@@ -258,7 +261,12 @@ public class ToolboxDeploymentUndeploymentTestCase {
         option.setManageSession(true);
         option.setProperty(org.apache.axis2.transport.http.HTTPConstants.COOKIE_STRING,
                 loggedInSessionCookie);
+    }
 
+    private void logQueries(String[] queries) {
+        for (int i = 0; i < queries.length; i++) {
+            log.info("query " + i + " : " + queries[i].trim());
+        }
     }
 
 }
