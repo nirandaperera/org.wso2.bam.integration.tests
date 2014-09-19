@@ -46,7 +46,7 @@ import java.net.URL;
 
 import static org.testng.Assert.assertTrue;
 
-/*
+/**
 * This test case validates the following use case.
 * Once a toolbox is deployed, the analytic scripts are being saved in the registry.
 * It may be needed to change these analytic scripts time to time and the most convenient way to achieve this is, replacing the toolbox in the deployment folder of BAM.
@@ -73,38 +73,9 @@ public class ToolboxDeploymentValidationTestCase {
     private String initialScript;
     private String replacedScript;
     private ResourceAdminServiceStub registryStub;
-
     private String sessionCookie;
 
     private ServerUtils serverUtils = new ServerUtils();
-//    private LoginLogoutUtil loginLogoutUtil = new LoginLogoutUtil();
-
-//    @Test(groups = {"wso2.bam"}, timeOut = 180000)
-//    public void beforeClass() {
-//        log.info("Stopping any existing servers!");
-//        System.out.println(FrameworkSettings.CARBON_HOME);
-//        carbonHome= FrameworkSettings.CARBON_HOME;
-//
-//        BAMTestServerManager mgr = new BAMTestServerManager();
-//
-//        System.out.println("stopping server **************************");
-//        try {
-//            mgr.stopServer();
-////            stopServer();
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        }
-//
-//        System.out.println("*****************starting server ****************");
-//        try {
-//            startServer();
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-//        System.out.println(FrameworkSettings.CARBON_HOME);
-//
-//
-//    }
 
     @BeforeClass(groups = {"wso2.bam"}, timeOut = 360000)
     public void init() throws Exception {

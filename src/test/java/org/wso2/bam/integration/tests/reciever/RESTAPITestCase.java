@@ -24,7 +24,6 @@ import org.apache.http.params.HttpProtocolParams;
 import org.apache.http.util.EntityUtils;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
 import org.wso2.carbon.analytics.hive.stub.HiveExecutionServiceHiveExecutionException;
 import org.wso2.carbon.analytics.hive.stub.HiveExecutionServiceStub;
 import org.wso2.carbon.integration.framework.LoginLogoutUtil;
@@ -40,7 +39,6 @@ import java.util.List;
 
 import static junit.framework.Assert.fail;
 import static org.testng.Assert.*;
-import static org.testng.Assert.assertEquals;
 
 /**
  * Copyright (c) WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
@@ -217,7 +215,7 @@ public class RESTAPITestCase {
     }
 
 
-    @Test (groups = {"wso2.bam"})
+    //@Test (groups = {"wso2.bam"})
     public static void publishRESTStreamDefnsAndEvents() {
         try {
             String errorMsg = "Unexpected status code returned.";
@@ -260,7 +258,7 @@ public class RESTAPITestCase {
 
     }
 
-    @Test (groups = {"wso2.bam"})
+    //@Test (groups = {"wso2.bam"})
     public static void dataTypeValueComparison() {
         publishRESTSEvents();
         runHiveDataTypeTest();
